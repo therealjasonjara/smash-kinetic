@@ -3,15 +3,17 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/db/store";
+import { findBalancedPair } from "@/lib/utils";
 import type { QueueEntry } from "@/lib/types";
 
 // No-Line Rule: selected state uses background shift (bg-primary/15), never border
 // Spec: surface-container-lowest card, xl radius
 
 export function JoinQueueForm() {
-  const { players, queue, matches, joinQueue } = useAppStore();
+  const { players, queue, matches, activeSessionId, joinQueue } = useAppStore();
   const [matchType, setMatchType] = useState<QueueEntry["matchType"]>("doubles");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [repeatWarning, setRepeatWarning] = useState(false);
   const [error, setError] = useState("");
 
   const needed = matchType === "doubles" ? 2 : 1;
@@ -33,6 +35,17 @@ export function JoinQueueForm() {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+    setRepeatWarning(false);
+    setError("");
+  }
+
+  function randomize() {
+    if (!activeSessionId) return;
+    const sessionMatches = matches.filter((m) => m.sessionId === activeSessionId);
+    const result = findBalancedPair(available, sessionMatches, activeSessionId);
+    if (!result) return;
+    setSelectedIds(result.ids);
+    setRepeatWarning(result.wasRepeated);
     setError("");
   }
 
@@ -43,6 +56,7 @@ export function JoinQueueForm() {
     }
     joinQueue(selectedIds.slice(0, needed), matchType);
     setSelectedIds([]);
+    setRepeatWarning(false);
   }
 
   return (
@@ -73,6 +87,31 @@ export function JoinQueueForm() {
           </button>
         ))}
       </div>
+
+      {/* Randomize — doubles only */}
+      {matchType === "doubles" && (
+        <div className="space-y-2">
+          <button
+            onClick={randomize}
+            disabled={available.length < 2}
+            className={`tap-target w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+              font-headline text-label-md font-semibold uppercase tracking-editorial
+              transition-all duration-150
+              ${available.length < 2
+                ? "bg-surface-container text-on-surface-variant/40 cursor-not-allowed"
+                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+              }`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>shuffle</span>
+            Randomize Pairing
+          </button>
+          {repeatWarning && (
+            <p className="font-body text-label-md text-on-surface-variant/70 text-center">
+              Best available — all pairs have played together this session
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Player selection */}
       <div className="space-y-2">

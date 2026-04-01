@@ -1,4 +1,4 @@
-import type { Player, QueueEntry, EloResult } from "@/lib/types";
+import type { Player, QueueEntry, Match, EloResult } from "@/lib/types";
 
 /** Generate a short random ID */
 export function generateId(): string {
@@ -88,6 +88,60 @@ export function estimateWait(position: number, avgMatchMinutes = 22): string {
   if (mins < 1) return "< 1 min";
   if (mins < 60) return `~${mins} min`;
   return `~${Math.round(mins / 6) / 10} hr`;
+}
+
+/**
+ * Find the best doubles pairing from available players for the current session.
+ *
+ * Scoring per candidate pair (lower = better):
+ *   - |levelA - levelB|          → skill balance (0–4)
+ *   - +5 if played together this session → outweighs any level diff, so fresh pairings
+ *     are always preferred; falls back to skill balance when all pairs are repeats
+ *   - +random(0, 0.9)            → jitter so re-rolling produces variety
+ *
+ * Returns the winning [idA, idB] and whether it was a repeated pairing (fallback).
+ * Returns null if fewer than 2 players are available.
+ */
+export function findBalancedPair(
+  available: Player[],
+  sessionMatches: Match[],
+  sessionId: string
+): { ids: [string, string]; wasRepeated: boolean } | null {
+  if (available.length < 2) return null;
+
+  // Build the set of same-team pairs from this session's match history
+  const playedTogether = new Set<string>();
+  for (const match of sessionMatches) {
+    if (match.sessionId !== sessionId) continue;
+    for (const team of match.teams) {
+      for (let i = 0; i < team.length; i++) {
+        for (let j = i + 1; j < team.length; j++) {
+          playedTogether.add([team[i], team[j]].sort().join("|"));
+        }
+      }
+    }
+  }
+
+  type Candidate = { ids: [string, string]; score: number; wasRepeated: boolean };
+  const candidates: Candidate[] = [];
+
+  for (let i = 0; i < available.length; i++) {
+    for (let j = i + 1; j < available.length; j++) {
+      const a = available[i];
+      const b = available[j];
+      const pairKey = [a.id, b.id].sort().join("|");
+      const repeated = playedTogether.has(pairKey);
+      candidates.push({
+        ids: [a.id, b.id],
+        score: Math.abs(a.level - b.level) + (repeated ? 5 : 0) + Math.random() * 0.9,
+        wasRepeated: repeated,
+      });
+    }
+  }
+
+  candidates.sort((a, b) => a.score - b.score);
+  const best = candidates[0];
+  return { ids: best.ids, wasRepeated: best.wasRepeated };
 }
 
 /** Level label for display */
