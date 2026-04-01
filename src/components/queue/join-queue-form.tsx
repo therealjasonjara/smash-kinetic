@@ -9,16 +9,25 @@ import type { QueueEntry } from "@/lib/types";
 // Spec: surface-container-lowest card, xl radius
 
 export function JoinQueueForm() {
-  const { players, queue, joinQueue } = useAppStore();
+  const { players, queue, matches, joinQueue } = useAppStore();
   const [matchType, setMatchType] = useState<QueueEntry["matchType"]>("doubles");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   const needed = matchType === "doubles" ? 2 : 1;
-  const alreadyQueued = new Set(
-    queue.filter((e) => e.status === "waiting").flatMap((e) => e.playerIds)
-  );
-  const available = players.filter((p) => !alreadyQueued.has(p.id));
+
+  const unavailable = new Set([
+    // Already waiting or assigned in the queue
+    ...queue
+      .filter((e) => e.status === "waiting" || e.status === "assigned")
+      .flatMap((e) => e.playerIds),
+    // Currently on court in an active match
+    ...matches
+      .filter((m) => !m.endedAt)
+      .flatMap((m) => [...m.teams[0], ...m.teams[1]]),
+  ]);
+
+  const available = players.filter((p) => !unavailable.has(p.id));
 
   function toggle(id: string) {
     setSelectedIds((prev) =>
@@ -71,15 +80,23 @@ export function JoinQueueForm() {
           Select {needed} player{needed > 1 ? "s" : ""}
         </p>
 
-        {available.length === 0 ? (
+        {players.length === 0 ? (
           <p className="font-body text-body-md text-on-surface-variant">
-            All players are already queued.
+            No players added yet.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            {available.map((p) => {
+            {players.map((p) => {
+              const isUnavailable = unavailable.has(p.id);
               const selected = selectedIds.includes(p.id);
-              const disabled = !selected && selectedIds.length >= needed;
+              const selectionFull = !selected && selectedIds.length >= needed;
+              const disabled = isUnavailable || selectionFull;
+
+              const inActiveMatch = matches.some(
+                (m) => !m.endedAt && (m.teams[0].includes(p.id) || m.teams[1].includes(p.id))
+              );
+              const statusLabel = inActiveMatch ? "Playing" : isUnavailable ? "Queued" : null;
+
               return (
                 <button
                   key={p.id}
@@ -89,17 +106,19 @@ export function JoinQueueForm() {
                   className={`tap-target flex items-center gap-2 px-3 py-3 rounded-xl text-left transition-all duration-150
                     ${selected
                       ? "bg-primary/15 text-on-surface shadow-kinetic"
-                      : disabled
+                      : isUnavailable
+                      ? "bg-surface-container text-on-surface-variant/40 cursor-not-allowed"
+                      : selectionFull
                       ? "bg-surface-container text-on-surface-variant/40 cursor-not-allowed"
                       : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
                     }`}
                 >
                   <span className="material-symbols-outlined text-primary" style={{ fontSize: "18px" }}>
-                    {selected ? "check_circle" : "radio_button_unchecked"}
+                    {isUnavailable ? "block" : selected ? "check_circle" : "radio_button_unchecked"}
                   </span>
                   <span className="font-body text-body-md truncate">{p.name}</span>
                   <span className="ml-auto font-body text-label-sm text-on-surface-variant/70 shrink-0">
-                    L{p.level}
+                    {statusLabel ?? `L${p.level}`}
                   </span>
                 </button>
               );
