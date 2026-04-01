@@ -67,7 +67,7 @@ export function CourtCard({ court, onEndMatch, onAssign }: CourtCardProps) {
           {activeMatch && onEndMatch && (
             <Button
               size="sm"
-              variant="ghost"
+              variant="danger"
               onClick={() => onEndMatch(activeMatch.id)}
             >
               End Match

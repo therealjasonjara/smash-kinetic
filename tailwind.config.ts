@@ -61,10 +61,10 @@ const config: Config = {
         "label-sm": ["0.625rem", { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "500" }],
       },
       borderRadius: {
-        DEFAULT: "0.5rem",
-        lg: "0.75rem",
-        xl: "1.5rem",
-        "2xl": "2rem",
+        DEFAULT: "0.375rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        "2xl": "1rem",
         full: "9999px",
       },
       boxShadow: {
